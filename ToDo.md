@@ -1,7 +1,8 @@
 # Crawler
 
 - [ ] priority queue
-- [ ] čtení stránky
+- [ ] vypočítávání priority
+- [x] čtení stránky
 - [ ] ukládání odkazů
 - [ ] checkování odkazů jestli už jsem je prošel
 - [ ] limit hloubky odkazů
