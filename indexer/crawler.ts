@@ -1,15 +1,24 @@
 import puppeteer, { Browser } from "puppeteer";
 import mongoose from "mongoose";
+import { Heap } from "heap-js";
 
 mongoose.connect("mongodb://localhost/quaeritodb");
 
 const ignoredExtensions =
 	/\.(jpg|jpeg|png|gif|pdf|zip|css|js|mp4|svg|ico|json|xml)$/i;
 
+const weightDepth = 5;
+const weightDomainRepeat = 6;
+
 interface PageData {
 	url: string;
 	content: string;
 	links: string[];
+}
+
+interface ToQueue {
+	url: string;
+	score: number;
 }
 
 const pageDataSchema = new mongoose.Schema(
@@ -35,10 +44,11 @@ const PageDataModel = mongoose.model("PageData", pageDataSchema);
 class Crawler {
 	private browser: Browser | null = null;
 	private visited: Set<string> = new Set();
-	private queue: string[] = [];
+	private queue = new Heap((a: ToQueue, b: ToQueue) => a.score - b.score);
+	private domainCounts: Map<string, number> = new Map();
 
 	constructor(startUrl: string) {
-		this.queue.push(startUrl);
+		this.queue.add({ url: startUrl, score: 0 });
 	}
 
 	async init() {
@@ -49,11 +59,20 @@ class Crawler {
 			const visitedUrls = await PageDataModel.distinct("url");
 			for (const visitedUrl of visitedUrls) {
 				this.visited.add(visitedUrl);
+
+				const domain = new URL(visitedUrl).hostname;
+				const savedDomain = this.domainCounts.get(domain);
+				this.domainCounts.set(domain, (savedDomain || 0) + 1);
 			}
 
-			console.info("Visited loaded");
+			console.info("Visited and domainCounts loaded");
+			// console.info(
+			// 	`Visited URLs (${this.visited.size}):`,
+			// 	Array.from(this.visited),
+			// );
+			// console.info(`Domain counts:`, Object.fromEntries(this.domainCounts));
 		} catch (error) {
-			console.error("Error loading visited " + error);
+			console.error("Error loading visited and domainCounts " + error);
 		}
 	}
 
@@ -65,7 +84,14 @@ class Crawler {
 	private sanitizeUrl(rawUrl: string, baseUrl: string): string | null {
 		try {
 			const url = new URL(rawUrl, baseUrl);
+
+			if (!url.protocol.startsWith("http")) return null;
+
 			url.hash = "";
+
+			if (url.pathname.endsWith("/") && url.pathname.length > 1) {
+				url.pathname = url.pathname.slice(0, -1);
+			}
 
 			if (ignoredExtensions.test(url.pathname)) return null;
 
@@ -78,6 +104,19 @@ class Crawler {
 		} catch {
 			return null;
 		}
+	}
+
+	private calculateScore(url: string): number {
+		const domain = new URL(url).hostname;
+
+		const pathDepth = url.split("/").length - 3;
+		const depthPenalty = Math.log(Math.max(1, pathDepth)) * weightDepth;
+
+		const domainCount = this.domainCounts.get(domain) || 0;
+		const domainPenalty =
+			Math.log(Math.max(1, domainCount)) * weightDomainRepeat;
+
+		return depthPenalty + domainPenalty;
 	}
 
 	private async processPage(url: string): Promise<PageData | null> {
@@ -108,7 +147,8 @@ class Crawler {
 				state: "🟢",
 				url: url,
 				queueLength: this.queue.length,
-				validLinks,
+				visitedLength: this.visited.size,
+				linksFound: validLinks.length,
 			});
 			return { url, content, links: validLinks };
 		} catch (error) {
@@ -124,12 +164,16 @@ class Crawler {
 
 	async start() {
 		await this.init();
-		while (this.queue.length > 0) {
-			const currentUrl = this.queue.shift();
+
+		while (this.queue.size() > 0) {
+			const { url: currentUrl } = this.queue.pop()!;
 
 			if (!currentUrl || this.visited.has(currentUrl)) continue;
 
 			this.visited.add(currentUrl);
+			const domain = new URL(currentUrl).hostname;
+			const savedDomain = this.domainCounts.get(domain);
+			this.domainCounts.set(domain, (savedDomain || 0) + 1);
 
 			const pageData = await this.processPage(currentUrl);
 
@@ -141,12 +185,13 @@ class Crawler {
 
 				for (const link of pageData.links) {
 					if (!this.visited.has(link)) {
-						this.queue.push(link);
+						const score = this.calculateScore(link);
+						this.queue.add({ url: link, score });
 					}
 				}
 			}
 
-			await new Promise((r) => setTimeout(r, 1000));
+			await new Promise((r) => setTimeout(r, 100));
 		}
 
 		await this.close();
@@ -154,7 +199,8 @@ class Crawler {
 }
 
 (async () => {
-	const startUrl = "https://ssps.cz";
+	const startUrl =
+		"https://www.sablik.eu/ma-tvorba/slechta-a-kardinalove/slechta-a-kardinalove-2-dil";
 
 	const crawler = new Crawler(startUrl);
 	await crawler.start();

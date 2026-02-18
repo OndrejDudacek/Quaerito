@@ -1,11 +1,11 @@
 # Crawler
 
-- [ ] priority queue
-- [ ] vypočítávání priority
+- [x] priority queue
+- [x] vypočítávání priority
+- [x] keeping track of kolikrat jsem byl na jaky domene
 - [x] čtení stránky
 - [x] ukládání odkazů
 - [x] checkování odkazů jestli už jsem je prošel
-- [ ] limit hloubky odkazů
 - [x] vybrat DB
 - [x] propojení s DB
 
