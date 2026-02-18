@@ -3,11 +3,11 @@
 - [ ] priority queue
 - [ ] vypočítávání priority
 - [x] čtení stránky
-- [ ] ukládání odkazů
-- [ ] checkování odkazů jestli už jsem je prošel
+- [x] ukládání odkazů
+- [x] checkování odkazů jestli už jsem je prošel
 - [ ] limit hloubky odkazů
-- [ ] vybrat DB
-- [ ] propojení s DB
+- [x] vybrat DB
+- [x] propojení s DB
 
 ## Indexer
 

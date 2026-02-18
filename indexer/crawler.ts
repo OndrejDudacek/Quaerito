@@ -1,4 +1,7 @@
-import puppeteer, { Browser, Page } from "puppeteer";
+import puppeteer, { Browser } from "puppeteer";
+import mongoose from "mongoose";
+
+mongoose.connect("mongodb://localhost/quaeritodb");
 
 const ignoredExtensions =
 	/\.(jpg|jpeg|png|gif|pdf|zip|css|js|mp4|svg|ico|json|xml)$/i;
@@ -8,6 +11,26 @@ interface PageData {
 	content: string;
 	links: string[];
 }
+
+const pageDataSchema = new mongoose.Schema(
+	{
+		url: {
+			type: String,
+			required: true,
+			unique: true,
+			index: true,
+		},
+		content: {
+			type: String,
+			required: true,
+		},
+	},
+	{
+		timestamps: true,
+	},
+);
+
+const PageDataModel = mongoose.model("PageData", pageDataSchema);
 
 class Crawler {
 	private browser: Browser | null = null;
@@ -21,6 +44,17 @@ class Crawler {
 	async init() {
 		this.browser = await puppeteer.launch();
 		console.info("Initializing browser");
+
+		try {
+			const visitedUrls = await PageDataModel.distinct("url");
+			for (const visitedUrl of visitedUrls) {
+				this.visited.add(visitedUrl);
+			}
+
+			console.info("Visited loaded");
+		} catch (error) {
+			console.error("Error loading visited " + error);
+		}
 	}
 
 	async close() {
@@ -51,7 +85,7 @@ class Crawler {
 		const page = await this.browser.newPage();
 
 		try {
-			console.info("Starting processing of " + url);
+			console.info({ state: "➡️", url: url });
 
 			await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
 
@@ -70,11 +104,58 @@ class Crawler {
 				validLinks.push(sanitized);
 			}
 
+			console.info({
+				state: "🟢",
+				url: url,
+				queueLength: this.queue.length,
+				validLinks,
+			});
 			return { url, content, links: validLinks };
 		} catch (error) {
-			console.error(`Error processing ${url}:`, error);
+			console.error({
+				state: "🔴",
+				url,
+				error,
+			});
 			await page.close();
 			return null;
 		}
 	}
+
+	async start() {
+		await this.init();
+		while (this.queue.length > 0) {
+			const currentUrl = this.queue.shift();
+
+			if (!currentUrl || this.visited.has(currentUrl)) continue;
+
+			this.visited.add(currentUrl);
+
+			const pageData = await this.processPage(currentUrl);
+
+			if (pageData) {
+				await PageDataModel.create({
+					url: pageData.url,
+					content: pageData.content,
+				});
+
+				for (const link of pageData.links) {
+					if (!this.visited.has(link)) {
+						this.queue.push(link);
+					}
+				}
+			}
+
+			await new Promise((r) => setTimeout(r, 1000));
+		}
+
+		await this.close();
+	}
 }
+
+(async () => {
+	const startUrl = "https://ssps.cz";
+
+	const crawler = new Crawler(startUrl);
+	await crawler.start();
+})();
