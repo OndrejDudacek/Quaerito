@@ -4,6 +4,12 @@
 		"cheerio": "^1.2.0",
 		"heap-js": "^2.7.1",
 		"mongoose": "^9.2.1",
-		"puppeteer": "^24.37.2"
+		"puppeteer": "^24.37.2",
+		"snowball-stemmers": "^0.6.0",
+		"stopword": "^3.1.5"
+	},
+	"devDependencies": {
+		"@types/snowball-stemmers": "^0.6.2",
+		"@types/stopword": "^2.0.3"
 	}
 }

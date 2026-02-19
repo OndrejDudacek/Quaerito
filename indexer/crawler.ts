@@ -8,7 +8,7 @@ const ignoredExtensions =
 	/\.(jpg|jpeg|png|gif|pdf|zip|css|js|mp4|svg|ico|json|xml)$/i;
 
 const weightDepth = 5;
-const weightDomainRepeat = 6;
+const weightDomainRepeat = 10;
 
 interface PageData {
 	url: string;
