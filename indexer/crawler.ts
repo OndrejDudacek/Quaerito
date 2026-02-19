@@ -16,6 +16,8 @@ interface PageData {
 	links: string[];
 }
 
+export type PageDataToDb = Omit<PageData, "links">;
+
 interface ToQueue {
 	url: string;
 	score: number;
@@ -39,9 +41,9 @@ const pageDataSchema = new mongoose.Schema(
 	},
 );
 
-const PageDataModel = mongoose.model("PageData", pageDataSchema);
+export const PageDataModel = mongoose.model("PageData", pageDataSchema);
 
-class Crawler {
+export class Crawler {
 	private browser: Browser | null = null;
 	private visited: Set<string> = new Set();
 	private queue = new Heap((a: ToQueue, b: ToQueue) => a.score - b.score);
@@ -197,11 +199,3 @@ class Crawler {
 		await this.close();
 	}
 }
-
-(async () => {
-	const startUrl =
-		"https://www.sablik.eu/ma-tvorba/slechta-a-kardinalove/slechta-a-kardinalove-2-dil";
-
-	const crawler = new Crawler(startUrl);
-	await crawler.start();
-})();
