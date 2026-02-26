@@ -1,6 +1,0 @@
-- crawler vleze na stránku
-- vezme jeji kontent a odkazy
-- odkazy syntetizuje
-- vypočita odkazum prioritu a passne je do queue
-- kontent a url passne idexeru
-- indexer vytahne obsah a klicova slova a popsi z html lematizuje ho a ulozi ho pod url s timestampem taky vytvori vector stránky
