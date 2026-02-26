@@ -8,7 +8,8 @@ const ignoredExtensions =
 	/\.(jpg|jpeg|png|gif|pdf|zip|css|js|mp4|svg|ico|json|xml)$/i;
 
 const weightDepth = 5;
-const weightDomainRepeat = 10;
+const weightDomainRepeat = 8;
+const czDomain = 0.8;
 
 interface PageData {
 	url: string;
@@ -41,41 +42,38 @@ const pageDataSchema = new mongoose.Schema(
 	},
 );
 
+const domainCountSchema = new mongoose.Schema({
+	domain: {
+		type: String,
+		required: true,
+		unique: true,
+		index: true,
+	},
+	count: {
+		type: Number,
+		required: true,
+	},
+});
+
 export const PageDataModel = mongoose.model("PageData", pageDataSchema);
+const DomainCountModel = mongoose.model("DomainCount", domainCountSchema);
 
 export class Crawler {
 	private browser: Browser | null = null;
-	private visited: Set<string> = new Set();
 	private queue = new Heap((a: ToQueue, b: ToQueue) => a.score - b.score);
-	private domainCounts: Map<string, number> = new Map();
 
 	constructor(startUrl: string) {
 		this.queue.add({ url: startUrl, score: 0 });
 	}
 
+	private async visited(url: string): Promise<boolean> {
+		const find = await PageDataModel.find({ url });
+		return find.length > 0;
+	}
+
 	async init() {
 		this.browser = await puppeteer.launch();
 		console.info("Initializing browser");
-
-		try {
-			const visitedUrls = await PageDataModel.distinct("url");
-			for (const visitedUrl of visitedUrls) {
-				this.visited.add(visitedUrl);
-
-				const domain = new URL(visitedUrl).hostname;
-				const savedDomain = this.domainCounts.get(domain);
-				this.domainCounts.set(domain, (savedDomain || 0) + 1);
-			}
-
-			console.info("Visited and domainCounts loaded");
-			// console.info(
-			// 	`Visited URLs (${this.visited.size}):`,
-			// 	Array.from(this.visited),
-			// );
-			// console.info(`Domain counts:`, Object.fromEntries(this.domainCounts));
-		} catch (error) {
-			console.error("Error loading visited and domainCounts " + error);
-		}
 	}
 
 	async close() {
@@ -83,7 +81,10 @@ export class Crawler {
 		console.info("Closing browser");
 	}
 
-	private sanitizeUrl(rawUrl: string, baseUrl: string): string | null {
+	private async sanitizeUrl(
+		rawUrl: string,
+		baseUrl: string,
+	): Promise<string | null> {
 		try {
 			const url = new URL(rawUrl, baseUrl);
 
@@ -100,7 +101,7 @@ export class Crawler {
 			const segments = url.pathname.split("/").filter(Boolean);
 			if (segments.length > new Set(segments).size + 2) return null;
 
-			if (this.visited.has(url.href)) return null;
+			if (await this.visited(url.href)) return null;
 
 			return url.href;
 		} catch {
@@ -108,15 +109,18 @@ export class Crawler {
 		}
 	}
 
-	private calculateScore(url: string): number {
+	private async calculateScore(url: string): Promise<number> {
 		const domain = new URL(url).hostname;
 
 		const pathDepth = url.split("/").length - 3;
 		const depthPenalty = Math.log(Math.max(1, pathDepth)) * weightDepth;
 
-		const domainCount = this.domainCounts.get(domain) || 0;
+		const domainDoc = await DomainCountModel.findOne({ domain });
+		const count = domainDoc?.count || 0;
+		let czDomainBonus = 1;
+		if (domain.match(/\.cz$/i)) czDomainBonus = czDomain;
 		const domainPenalty =
-			Math.log(Math.max(1, domainCount)) * weightDomainRepeat;
+			Math.log(Math.max(1, count)) * weightDomainRepeat * czDomainBonus;
 
 		return depthPenalty + domainPenalty;
 	}
@@ -124,6 +128,9 @@ export class Crawler {
 	private async processPage(url: string): Promise<PageData | null> {
 		if (!this.browser) throw new Error("Browser not initialized!");
 		const page = await this.browser.newPage();
+		await page.setExtraHTTPHeaders({
+			"Accept-Language": "cs",
+		});
 
 		try {
 			console.info({ state: "➡️", url: url });
@@ -140,16 +147,16 @@ export class Crawler {
 
 			const validLinks: string[] = [];
 			for (const rawLink of rawLinks) {
-				const sanitized = this.sanitizeUrl(rawLink, url);
+				const sanitized = await this.sanitizeUrl(rawLink, url);
 				if (sanitized === null) continue;
 				validLinks.push(sanitized);
 			}
 
-			console.info({
+			console.log({
 				state: "🟢",
 				url: url,
 				queueLength: this.queue.length,
-				visitedLength: this.visited.size,
+				visitedLength: (await PageDataModel.find().distinct("url")).length,
 				linksFound: validLinks.length,
 			});
 			return { url, content, links: validLinks };
@@ -170,12 +177,15 @@ export class Crawler {
 		while (this.queue.size() > 0) {
 			const { url: currentUrl } = this.queue.pop()!;
 
-			if (!currentUrl || this.visited.has(currentUrl)) continue;
+			if (!currentUrl || (await this.visited(currentUrl))) continue;
 
-			this.visited.add(currentUrl);
 			const domain = new URL(currentUrl).hostname;
-			const savedDomain = this.domainCounts.get(domain);
-			this.domainCounts.set(domain, (savedDomain || 0) + 1);
+
+			await DomainCountModel.updateOne(
+				{ domain },
+				{ $inc: { count: 1 } },
+				{ upsert: true },
+			);
 
 			const pageData = await this.processPage(currentUrl);
 
@@ -186,8 +196,8 @@ export class Crawler {
 				});
 
 				for (const link of pageData.links) {
-					if (!this.visited.has(link)) {
-						const score = this.calculateScore(link);
+					if (!(await this.visited(link))) {
+						const score = await this.calculateScore(link);
 						this.queue.add({ url: link, score });
 					}
 				}
