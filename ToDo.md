@@ -19,10 +19,11 @@
 - [x] filtr jen slov slov
 - [x] lowercase, normalizace, trim, hacky carky
 - [x] cesky stemming
-- [ ] vahy
 - [x] ukladani do indexu
-- [x] tdidf
-- [x] tvorba vektorů - ? hned nebo na konci crawlování ?
+- [ ] vahy
+- [ ] td
+- [ ] idf
+- [ ] tvorba vektorů - na konci crawlování
 
 # BE
 

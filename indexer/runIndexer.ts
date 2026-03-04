@@ -2,5 +2,6 @@ import { Indexer } from "./indexer.ts";
 
 (async () => {
 	const indexer = new Indexer();
-	await indexer.start();
+	// await indexer.startIndexing();
+	await indexer.startVectorization();
 })();
