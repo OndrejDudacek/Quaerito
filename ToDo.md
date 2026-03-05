@@ -21,9 +21,9 @@
 - [x] cesky stemming
 - [x] ukladani do indexu
 - [ ] vahy
-- [ ] td
-- [ ] idf
-- [ ] tvorba vektorů - na konci crawlování
+- [x] td
+- [x] idf
+- [x] tvorba vektorů - na konci crawlování
 
 # BE
 

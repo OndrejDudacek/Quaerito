@@ -27,6 +27,7 @@ const wordAppearanceSchema = new mongoose.Schema({
 const vectorSchema = new mongoose.Schema({
 	url: { type: String, required: true, unique: true, index: true },
 	vector: { type: Map, of: Number, required: true },
+	vectorSize: { type: Number, required: true },
 });
 
 const PageIndexModel = mongoose.model("PageIndex", pageIndexSchema);
@@ -34,7 +35,7 @@ const WordAppearanceModel = mongoose.model(
 	"WordAppearance",
 	wordAppearanceSchema,
 );
-const VectorModel = mongoose.model("Vector", vectorSchema);
+export const VectorModel = mongoose.model("Vector", vectorSchema);
 
 export class Indexer {
 	private stopWords = new Set(sw.ces);
@@ -128,9 +129,22 @@ export class Indexer {
 				vector.set(wordEntry[0], tfidf);
 			}
 
+			let sumOfSquaredValues = 0;
+			for (const tfidf of vector.values()) {
+				sumOfSquaredValues += tfidf * tfidf;
+			}
+
+			const vectorSize = Math.sqrt(sumOfSquaredValues);
+
 			await VectorModel.updateOne(
 				{ url: pageIndex.url },
-				{ $set: { url: pageIndex.url, vector: Object.fromEntries(vector) } },
+				{
+					$set: {
+						url: pageIndex.url,
+						vector: Object.fromEntries(vector),
+						vectorSize,
+					},
+				},
 				{ upsert: true },
 			);
 
