@@ -2,6 +2,11 @@ import express, { type Request, type Response } from "express";
 import * as sw from "stopword";
 import snowballFactory from "snowball-stemmers";
 import mongoose from "mongoose";
+import cors from "cors";
+
+const app = express();
+app.use(express.json());
+app.use(cors());
 
 const urlsOnPage = 10;
 
@@ -14,9 +19,6 @@ const vectorSchema = new mongoose.Schema({
 });
 
 const VectorModel = mongoose.model("Vector", vectorSchema);
-
-const app = express();
-app.use(express.json());
 
 const stopWords = new Set(sw.ces);
 const stemmer = snowballFactory.newStemmer("czech");
@@ -96,7 +98,7 @@ app.get("/search", (req: Request, res: Response) => {
 	results.sort((a, b) => b.cosineSim - a.cosineSim);
 
 	res.json({
-		duration: `${((Date.now() - startTime) / 1000).toFixed(2).replace(".", ",")} seconds`,
+		duration: ((Date.now() - startTime) / 1000).toFixed(2),
 		resultsCount: results.length,
 		results: results.slice(page * urlsOnPage, (page + 1) * urlsOnPage),
 	});

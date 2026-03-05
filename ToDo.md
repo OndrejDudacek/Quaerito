@@ -34,5 +34,5 @@
 - [ ] respektování sitemap
 - [ ] respektování robots
 - [ ] vyhledávání pouze na konkrétní stránce (alternativa k site:)
-- [ ] získávání dynamického HTML (spuštění prohlížeče - Puppeteer)
-- [ ] chytré ukládání indexu
+- [x] získávání dynamického HTML (spuštění prohlížeče - Puppeteer)
+- [x] chytré ukládání indexu
